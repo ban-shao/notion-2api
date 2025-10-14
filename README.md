@@ -337,3 +337,13 @@ def create_sse_data(data: dict) -> str:
 ---
 
 **让我们一起，用代码创造更多可能性！** 🚀
+
+> ⚠️ **重要提示**: 如果 `token_v2` 的 `HttpOnly` 列显示为 ✓，说明该 Cookie 被设置为 HttpOnly。
+> 这种情况下，您仍然可以在 Application 标签页中看到并复制该值，但 JavaScript 无法自动读取。
+
+**替代方法（如果上述方法无效）**：
+1. 切换到 **Network** 标签页
+2. 刷新 Notion 页面或进行任意操作
+3. 点击任意网络请求
+4. 在 **Request Headers** 中找到 `Cookie:` 行
+5. 复制 `token_v2=` 后面的值（到下一个分号前）
