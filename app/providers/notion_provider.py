@@ -312,8 +312,13 @@ class NotionAIProvider(BaseProvider):
         content = re.sub(r'^.*?What model are you.*?in Chinese and specifically requesting.*?me.*?to.*?reply.*?in.*?Chinese\.\s*', '', content, flags=re.IGNORECASE | re.DOTALL)
         content = re.sub(r'^.*?This.*?is.*?a.*?question.*?about.*?my.*?identity.*?not requiring.*?any.*?tool.*?use.*?I.*?should.*?respond.*?directly.*?to.*?the.*?user.*?in.*?Chinese.*?as.*?requested\.\s*', '', content, flags=re.IGNORECASE | re.DOTALL)
         content = re.sub(r'^.*?I.*?should.*?identify.*?myself.*?as.*?Notion.*?AI.*?as.*?mentioned.*?in.*?the.*?system.*?prompt.*?\s*', '', content, flags=re.IGNORECASE | re.DOTALL)
-        content = re.sub(r'^.*?I.*?should.*?not.*?make.*?specific.*?claims.*?a    def _parse_ndjson_line_to_texts(self, line: bytes) -> List[Tuple[str, str]]:
-        results: List[Tuple[str, str]] = []
+        content = re.sub(r'^.*?I.*?should.*?not.*?make.*?specific.*?claims.*?a    def _parse_ndjson_line_to_texts(self, line: bytes) -> List[Tuple[str, str, str]]:
+        """
+        解析 NDJSON 行，返回 (处理类型, 内容, 内容类型) 的列表
+        处理类型: \'incremental\' 或 \'final\'
+        内容类型: \'text\' 或 \'thinking\'
+        """
+        results: List[Tuple[str, str, str]] = []
         try:
             s = line.decode("utf-8", errors="ignore").strip()
             if not s: return results
@@ -327,7 +332,7 @@ class NotionAIProvider(BaseProvider):
                 content = data.get("value", "")
                 if content:
                     logger.debug("从 'markdown-chat' 直接事件中提取到内容。")
-                    results.append(('final', content))
+                    results.append(('final', content, 'text'))
 
             # 格式2: Claude 和 GPT 返回的补丁流，以及 Gemini 的 patch 格式
             elif data.get("type") == "patch" and "v" in data:
@@ -343,21 +348,21 @@ class NotionAIProvider(BaseProvider):
                         content = value.get("value", "")
                         if content:
                             logger.debug("从 'patch' (Gemini-style) 中提取到完整内容。")
-                            results.append(('final', content))
+                            results.append(('final', content, 'text'))
                     
                     # Gemini 的增量内容 patch 格式
                     elif op_type == "x" and "/s/" in path and path.endswith("/value") and isinstance(value, str):
                         content = value
                         if content:
                             logger.debug(f"从 'patch' (Gemini增量) 中提取到内容片段，长度: {len(content)}")
-                            results.append(('incremental', content))
+                            results.append(('incremental', content, 'text'))
                     
                     # Claude 和 GPT 的增量内容 patch 格式 - 这是最常见的流式输出格式
                     elif op_type == "x" and "/value/" in path and isinstance(value, str):
                         content = value
                         if content:
                             logger.debug(f"从 'patch' (Claude/GPT增量) 中提取到内容片段，长度: {len(content)}")
-                            results.append(('incremental', content))
+                            results.append(('incremental', content, 'text'))
                     
                     # Claude 和 GPT 的完整内容 patch 格式
                     elif op_type == "a" and path.endswith("/value/-") and isinstance(value, dict):
@@ -369,7 +374,7 @@ class NotionAIProvider(BaseProvider):
                             content = value.get("content", "")
                             if content:
                                 logger.debug("从 'patch' (Claude/GPT-style) 中提取到 text 类型内容。")
-                                results.append(('final', content))
+                                results.append(('final', content, 'text'))
                         elif value_type == "thinking":
                             # 这是 AI 的思考过程，通常应该被过滤掉
                             thinking_content = value.get("content", "")
@@ -382,7 +387,7 @@ class NotionAIProvider(BaseProvider):
                         content = value.get("content", "")
                         if content:
                             logger.info("从 'patch' (Claude/GPT-style) 中提取到完整内容。")
-                            results.append(('final', content))
+                            results.append(('final', content, 'text'))
 
             # 格式3: 处理record-map类型的数据
             elif data.get("type") == "record-map" and "recordMap" in data:
@@ -418,7 +423,7 @@ class NotionAIProvider(BaseProvider):
                         
                         if content and isinstance(content, str):
                             logger.info(f"从 record-map (type: {step_type}) 提取到最终内容。")
-                            results.append(('final', content))
+                            results.append(('final', content, 'text'))
                             break 
     
         except (json.JSONDecodeError, AttributeError) as e:
