@@ -360,11 +360,25 @@ class NotionAIProvider(BaseProvider):
                             results.append(('incremental', content))
                     
                     # Claude 和 GPT 的完整内容 patch 格式
-                    elif op_type == "a" and path.endswith("/value/-") and isinstance(value, dict) and value.get("type") == "text":
-                        content = value.get("content", "")
-                        if content:
-                            logger.debug("从 'patch' (Claude/GPT-style) 中提取到完整内容。")
-                            results.append(('final', content)).get("type") == "text":
+                    elif op_type == "a" and path.endswith("/value/-") and isinstance(value, dict):
+                        # 检查 value 的 type 字段
+                        value_type = value.get("type", "")
+                        
+                        if value_type == "text":
+                            # 这是实际的回复内容
+                            content = value.get("content", "")
+                            if content:
+                                logger.debug("从 'patch' (Claude/GPT-style) 中提取到 text 类型内容。")
+                                results.append(('final', content))
+                        elif value_type == "thinking":
+                            # 这是 AI 的思考过程，通常应该被过滤掉
+                            thinking_content = value.get("content", "")
+                            if thinking_content:
+                                logger.debug(f"检测到 thinking 类型内容（长度: {len(thinking_content)}），已忽略。")
+                                # 不添加到 results，从而过滤掉思考内容
+                        else:
+                            # 未知类型，记录日志
+                            logger.debug(f"检测到未知的 value type: {value_type}").get("type") == "text":
                         content = value.get("content", "")
                         if content:
                             logger.info("从 'patch' (Claude/GPT-style) 中提取到完整内容。")
@@ -375,19 +389,29 @@ class NotionAIProvider(BaseProvider):
                 record_map = data["recordMap"]
                 if "thread_message" in record_map:
                     for msg_id, msg_data in record_map["thread_message"].items():
-                        value_data = msg_data.get("value", {}).get("value", {})
-                        step = value_data.get("step", {})
-                        if not step: continue
-
-                        content = ""
-                        step_type = step.get("type")
-
-                        if step_type == "markdown-chat":
+                        value_data = msg_data.get("va                        if step_type == "markdown-chat":
                             content = step.get("value", "")
                         elif step_type == "agent-inference":
                             agent_values = step.get("value", [])
                             if isinstance(agent_values, list):
+                                # 遍历所有项，但只提取 text 类型的内容
+                                text_contents = []
                                 for item in agent_values:
+                                    if isinstance(item, dict):
+                                        item_type = item.get("type", "")
+                                        if item_type == "text":
+                                            # 这是实际的回复内容
+                                            text_content = item.get("content", "")
+                                            if text_content:
+                                                text_contents.append(text_content)
+                                        elif item_type == "thinking":
+                                            # 这是思考内容，记录但不使用
+                                            thinking_content = item.get("content", "")
+                                            if thinking_content:
+                                                logger.debug(f"从 record-map 检测到 thinking 内容（长度: {len(thinking_content)}），已忽略。")
+                                
+                                # 合并所有 text 类型的内容
+                                content = "".join(text_contents)item in agent_values:
                                     if isinstance(item, dict) and item.get("type") == "text":
                                         content = item.get("content", "")
                                         break

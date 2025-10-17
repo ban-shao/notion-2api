@@ -99,8 +99,8 @@ Notion AI 的响应采用 NDJSON（换行分隔的 JSON）格式，主要包含�
     "o": "a",                     // 添加操作
     "p": "/s/0/value/-",          // 路径以 /value/- 结尾
     "v": {                        // 对象类型
-      "type": "text",
-      "content": "完整的响应内容"
+      "type": "text",             // 或 "thinking"
+      "content": "内容"
     }
   }]
 }
@@ -109,7 +109,9 @@ Notion AI 的响应采用 NDJSON（换行分隔的 JSON）格式，主要包含�
 **识别特征：**
 - 操作类型：`"o": "a"`
 - 路径特征：以 `/value/-` 结尾
-- 值类型：对象，包含 `type: "text"`
+- 值类型：对象，可能包含：
+  - `type: "text"` - 实际回复内容（应该显示）
+  - `type: "thinking"` - AI 思考过程（应该过滤）
 
 ---
 
@@ -175,13 +177,21 @@ Notion AI 的响应采用 NDJSON（换行分隔的 JSON）格式，主要包含�
     "type": "agent-inference",
     "value": [
       {
-        "type": "text",
+        "type": "thinking",  // AI 的思考过程
+        "content": "让我思考一下这个问题..."
+      },
+      {
+        "type": "text",      // 实际的回复内容
         "content": "AI 生成的文本内容"
       }
     ]
   }
 }
 ```
+
+**重要区别：**
+- `type: "thinking"` - AI 的内部思考过程，应该被过滤掉，不显示给用户
+- `type: "text"` - 实际的回复内容，这才是应该显示给用户的内容
 
 ---
 
@@ -272,13 +282,52 @@ elif data.get("type") == "record-map":
 
 ## 🔧 扩展说明
 
+### Value 对象的 Type 字段详解
+
+在 `agent-inference` 和 patch 响应中，value 对象可能包含以下 `type` 字段：
+
+| Type | 说明 | 处理方式 | 示例 |
+|------|------|---------|------|
+| `text` | 实际的回复内容 | ✅ 显示给用户 | "这是 AI 的回答" |
+| `thinking` | AI 的思考过程 | ❌ 过滤掉，不显示 | "让我分析一下这个问题..." |
+| `thought` | 另一种思考标记 | ❌ 过滤掉，不显示 | "用户在问什么..." |
+
+### 典型的包含思考过程的响应
+
+```json
+// 流式响应中可能先出现 thinking
+{
+  "type": "patch",
+  "v": [{
+    "o": "a",
+    "p": "/s/0/value/-",
+    "v": {
+      "type": "thinking",
+      "content": "用户询问了关于 Python 的问题，我需要..."
+    }
+  }]
+}
+
+// 然后才是实际的 text 内容
+{
+  "type": "patch",
+  "v": [{
+    "o": "a",
+    "p": "/s/0/value/-",
+    "v": {
+      "type": "text",
+      "content": "Python 是一种高级编程语言..."
+    }
+  }]
+}
+```
+
 ### 其他可能的类型（未在代码中处理）
 
 根据 Notion AI 的更新，可能还会出现以下类型：
 - `error` - 错误消息
 - `status` - 状态更新
 - `title` - 对话标题生成
-- `thinking` - AI 思考过程（通常被过滤）
 
 ### 内容清洗
 
